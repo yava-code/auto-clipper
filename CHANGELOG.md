@@ -7,6 +7,20 @@
 - `main.py` — точка входа с хардкодед массивом
 - `requirements.txt` — keyboard, pyperclip
 
+## 2026-04-15 — Phase 4: Native Rust
+
+- `native/Cargo.toml` — workspace: windows 0.58, embed-resource, release profile (opt-z, lto, strip)
+- `native/clipqueue.manifest` — `asInvoker` (NO admin), DPI PerMonitorV2
+- `native/clipqueue.rc` — resource script для embed-resource
+- `native/build.rs` — embed manifest через embed-resource crate
+- `native/src/main.rs` — полная Win32 реализация:
+  - WH_KEYBOARD_LL без admin (ключевое отличие от Python)
+  - Pre-load стратегия + SetTimer вместо sleep (hook не блокируется)
+  - Dark mode через DwmSetWindowAttribute + WM_CTLCOLORxxx
+  - Input mode / Active mode переключение через ShowWindow
+  - UTF-16 clipboard для Cyrillic / любого Unicode
+  - AlwaysOnTop + 85% opacity через WS_EX_LAYERED
+
 ## 2026-04-15 — Финальная сборка
 
 - `ui/tray.py` — новый: system tray (pystray + PIL иконка), меню Показать / Выход

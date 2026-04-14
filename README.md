@@ -72,3 +72,27 @@ Uses `llama-3.3-70b-versatile`. Falls back gracefully if the API is unavailable.
 | groq_api_key | | Optional - enables AI parser |
 
 Saved to `config.json` next to the executable.
+
+---
+
+## Native version (Phase 4)
+
+Located in `native/`. Rust + raw Win32 — no Python, no admin, ~2MB.
+
+```
+cd native
+cargo build --release
+# output: native/target/release/ClipQueue.exe
+```
+
+**Key advantages over the Python version:**
+
+| | Python | Native |
+|-|--------|--------|
+| Admin required | Yes (keyboard lib) | **No** (WH_KEYBOARD_LL) |
+| Startup | ~3s | instant |
+| Binary size | ~40MB | ~2MB |
+| Runtime | Python + deps | none |
+
+The native version uses `WH_KEYBOARD_LL` (low-level keyboard hook) which Windows allows
+without elevation. The hook never blocks — it uses `SetTimer` instead of `sleep()`.
