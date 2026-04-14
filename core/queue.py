@@ -1,3 +1,4 @@
+import ctypes
 import time
 import keyboard
 import pyperclip
@@ -6,6 +7,9 @@ items = []
 idx = 0
 active = False
 on_complete = None
+sleep_ms = 15
+own_hwnd = None   # set by window after creation
+_hotkey = None
 
 
 def load(arr):
@@ -16,14 +20,20 @@ def load(arr):
     pyperclip.copy(items[0])
 
 
+def _clipqueue_focused():
+    if own_hwnd is None:
+        return False
+    return ctypes.windll.user32.GetForegroundWindow() == own_hwnd
+
+
 def on_ctrl_v():
     global idx, active
-    if not active:
+    if _clipqueue_focused() or not active:
         keyboard.send('ctrl+v')
         return
 
     keyboard.send('ctrl+v')
-    time.sleep(0.015)
+    time.sleep(sleep_ms / 1000)
 
     idx += 1
     if idx < len(items):
@@ -34,5 +44,18 @@ def on_ctrl_v():
             on_complete()
 
 
-def start():
-    keyboard.add_hotkey('ctrl+v', on_ctrl_v, suppress=True)
+def start(hotkey="ctrl+v"):
+    global _hotkey
+    _hotkey = hotkey
+    keyboard.add_hotkey(hotkey, on_ctrl_v, suppress=True)
+
+
+def change_hotkey(new_hotkey):
+    global _hotkey
+    if _hotkey:
+        try:
+            keyboard.remove_hotkey(_hotkey)
+        except Exception:
+            pass
+    _hotkey = new_hotkey
+    keyboard.add_hotkey(new_hotkey, on_ctrl_v, suppress=True)

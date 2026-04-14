@@ -1,6 +1,7 @@
 from ui.window import App
-from core import queue
+from core import queue, config
 
-app = App()
-queue.start()
+cfg = config.load()
+app = App(cfg)
+queue.start(cfg["hotkey"])
 app.mainloop()
