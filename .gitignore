@@ -1,0 +1,11 @@
+core/__pycache__/__init__.cpython-313.pyc
+core/__pycache__/__init__.cpython-314.pyc
+core/__pycache__/parser.cpython-313.pyc
+core/__pycache__/config.cpython-313.pyc
+core/__pycache__/queue.cpython-314.pyc
+ui/__pycache__/__init__.cpython-313.pyc
+ui/__pycache__/window.cpython-313.pyc
+core/__pycache__/queue.cpython-313.pyc
+ui\__pycache__
+core\__pycache__
+.venv
