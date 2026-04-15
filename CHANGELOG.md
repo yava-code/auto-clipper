@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-04-15 — UI: DWM fix, themes, drag, tests
+
+- `ui/window.py` — убраны Win11 acrylic path: attr 38, `DwmExtendFrameIntoClientArea(-1)`, ручной `WS_EX_LAYERED` (без layered-атрибутов он ломал отрисовку Tk → серый прямоугольник и кривой hit-test). Оставлены скругления (DWM attr 33) и `WS_EX_TOOLWINDOW` без layered
+- светлая / тёмная тема: `ui_theme` в `config.json`, секция «Внешний вид» в настройках, `_apply_theme()` после сохранения
+- drag: зона `_content_outer`, `outer` панелей, кнопка `↑/↓` в pill; блокировка старта drag с `CTkTextbox` / `CTkEntry` / `CTkOptionMenu`; `ButtonRelease-1` → `_save_pos()` после перетаскивания
+- pill: `border_width=1` для чуть более «плавающего» вида
+- `core/config.py` — дефолт `ui_theme: "light"`
+- `tests/test_config.py` — дефолт `ui_theme`, merge из файла без ключа, save/load `dark`
+
+## 2026-04-15 — UI Redesign: Floating Pill-Bar
+
+- `ui/window.py` — полный переписывание: borderless floating pill (420×52), light theme, expand/collapse анимация (smoothstep 8 steps × 16ms)
+- States: COLLAPSED / EXPANDED_INPUT / EXPANDED_ACTIVE — state machine с `_set_state()`
+- Win11 DWM: скруглённые углы (attr 33), acrylic backdrop (attr 38), shadow (-1 margins), WS_EX_TOOLWINDOW
+- `_apply_noactivate(on)` — WS_EX_NOACTIVATE ON в EXPANDED_ACTIVE (target app держит фокус при Ctrl+V), OFF в EXPANDED_INPUT
+- Drag: bottom edge anchored at `_screen_h - 40`, re-anchors при drag
+- Optimized `_poll()`: reuse CTkLabel widgets, rebuild только когда `len(queue.items)` меняется
+- Settings panel: in-place overlay (no resize), все поля сохраняются, кнопка "← Назад"
+- Убрана строка `queue.own_hwnd = ...` из `_init_tray()`
+
 ## 2026-04-14 — Phase 0: Core Logic
 
 - `core/__init__.py` — создан (пустой пакет)

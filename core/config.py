@@ -15,6 +15,7 @@ DEFAULTS = {
     "transform_suffix": "",
     "groq_api_key": "",
     "groq_model": "llama-3.3-70b-versatile",
+    "ui_theme": "light",
 }
 
 
