@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-04-15 — 5 фиксов: фокус/хук, анимация, pill UX
+
+- `core/queue.py` — добавлены `pause_hook()` / `resume_hook()`: снимать хук когда ClipQueue в фокусе, восстанавливать при потере — нативный Ctrl+V/C/A/X в textbox работает без переопределений
+- `ui/window.py` — FocusIn/FocusOut биндинги на `self` + `self.txt` вызывают pause/resume; убраны кастомные `_ctrl_v` / `_ctrl_a` обходы
+- `ui/window.py` — анимация: `wm_geometry` вместо `geometry`, `pack_forget` контента до анимации → нет мерцания; W=400, H_FULL=390, ANIM_STEPS=6, ANIM_MS=18
+- `ui/window.py` — COLLAPSED + queue.active → pill label показывает текущий элемент `→ {item} idx/n`; `_sync_pill_label()` вызывается из `_poll()`
+- `ui/window.py` — кнопка ⚙ в pill (всегда видна); `_on_gear_click`: если collapsed → expand + settings, иначе toggle settings
+
 ## 2026-04-15 — UI: DWM fix, themes, drag, tests
 
 - `ui/window.py` — убраны Win11 acrylic path: attr 38, `DwmExtendFrameIntoClientArea(-1)`, ручной `WS_EX_LAYERED` (без layered-атрибутов он ломал отрисовку Tk → серый прямоугольник и кривой hit-test). Оставлены скругления (DWM attr 33) и `WS_EX_TOOLWINDOW` без layered

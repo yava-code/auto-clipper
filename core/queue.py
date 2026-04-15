@@ -103,3 +103,14 @@ def change_hotkey(new_hotkey):
     log.get().info("hotkey changed to %s", new_hotkey)
     if was_registered:
         _register()
+
+
+def pause_hook():
+    """Call when ClipQueue gains focus — stop intercepting so textbox works natively."""
+    _unregister()
+
+
+def resume_hook():
+    """Call when ClipQueue loses focus — restore interception if queue is active."""
+    if active:
+        _register()

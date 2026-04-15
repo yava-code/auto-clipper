@@ -6,11 +6,11 @@ import customtkinter as ctk
 from core import queue, parser, config, groq_client, log
 from ui import tray
 
-W = 420
+W = 400
 H_PILL = 52
-H_FULL = 320
-ANIM_STEPS = 8
-ANIM_MS = 16
+H_FULL = 390
+ANIM_STEPS = 6
+ANIM_MS = 18
 
 COLLAPSED = 0
 EXPANDED_INPUT = 1
@@ -129,9 +129,18 @@ class App(ctk.CTk):
 
     def _sync_pill_label(self):
         if self._state == COLLAPSED:
-            self._pill_label.configure(text_color=self.c["placeholder"])
+            if queue.active and queue.items and queue.idx < len(queue.items):
+                item = queue.items[queue.idx]
+                s = item if len(item) <= 28 else item[:25] + "..."
+                self._pill_label.configure(
+                    text=f"→ {s}  {queue.idx}/{len(queue.items)}",
+                    text_color=self.c["accent"])
+            else:
+                self._pill_label.configure(
+                    text="ClipQueue", text_color=self.c["placeholder"])
         elif self._state == EXPANDED_INPUT:
-            self._pill_label.configure(text_color=self.c["text"])
+            self._pill_label.configure(
+                text="Вставьте текст", text_color=self.c["text"])
         else:
             self._pill_label.configure(text_color=self.c["accent"])
 
@@ -194,13 +203,22 @@ class App(ctk.CTk):
         )
         self._pill_btn.pack(side="right", padx=(0, 10))
 
+        self._gear_btn = ctk.CTkButton(
+            self._pill, text="⚙", width=30, height=30,
+            fg_color="transparent", hover_color=self.c["dim"],
+            text_color=self.c["muted"], font=("", 13),
+            command=self._on_gear_click,
+        )
+        self._gear_btn.pack(side="right", padx=(0, 4))
+
         self._pill_label = ctk.CTkLabel(
             self._pill, text="ClipQueue",
             text_color=self.c["placeholder"], font=("", 13), anchor="w",
         )
         self._pill_label.pack(side="left", fill="x", expand=True, padx=8)
 
-        for w in [self._pill, self._pill_icon, self._pill_label, self._pill_btn]:
+        for w in [self._pill, self._pill_icon, self._pill_label,
+                  self._pill_btn, self._gear_btn]:
             w.bind("<ButtonPress-1>", self._start_drag_proxy)
             w.bind("<B1-Motion>", self._do_drag)
             w.bind("<ButtonRelease-1>", self._on_drag_release)
@@ -250,14 +268,12 @@ class App(ctk.CTk):
 
         if new_state == COLLAPSED:
             self._pill_btn.configure(text="↑")
-            self._pill_label.configure(text="ClipQueue")
             self._sync_pill_label()
             self._apply_noactivate(False)
             self._animate_to(H_PILL)
 
         elif new_state == EXPANDED_INPUT:
             self._pill_btn.configure(text="↓")
-            self._pill_label.configure(text="Вставьте текст")
             self._sync_pill_label()
             self._apply_noactivate(False)
             self._build_input_panel()
@@ -279,6 +295,16 @@ class App(ctk.CTk):
         else:
             self._set_state(COLLAPSED)
 
+    def _on_gear_click(self):
+        if self._dragged:
+            self._dragged = False
+            return
+        if self._state == COLLAPSED:
+            self._set_state(EXPANDED_INPUT)
+            self.after(ANIM_STEPS * ANIM_MS + 20, self._toggle_settings)
+        else:
+            self._toggle_settings()
+
     # ---------------------------------------------------------------- animate
 
     def _animate_to(self, target_h):
@@ -287,20 +313,22 @@ class App(ctk.CTk):
                 self.after_cancel(self._anim_id)
             except Exception:
                 pass
+        if abs(self.winfo_height() - target_h) > 20:
+            self._content_outer.pack_forget()
         self._anim_step(self.winfo_height(), target_h, 0)
 
-    def _anim_step(self, start_h, target_h, step):
+    def _anim_step(self, start, target, step):
         t = step / ANIM_STEPS
         t = t * t * (3 - 2 * t)
-        h = int(start_h + (target_h - start_h) * t)
+        h = int(start + (target - start) * t)
         y = self._screen_h - 40 - h
-        self.geometry(f"{W}x{h}+{self.winfo_x()}+{y}")
-
+        self.wm_geometry(f"{W}x{h}+{self.winfo_x()}+{y}")
         if step < ANIM_STEPS:
             self._anim_id = self.after(
-                ANIM_MS, lambda: self._anim_step(start_h, target_h, step + 1))
+                ANIM_MS, lambda: self._anim_step(start, target, step + 1))
         else:
             self._anim_id = None
+            self._content_outer.pack(side="top", fill="both", expand=True)
 
     # ---------------------------------------------------------------- drag
 
@@ -331,44 +359,35 @@ class App(ctk.CTk):
         self._wire_outer_drag(outer)
 
         self.txt = ctk.CTkTextbox(
-            outer, fg_color=self.c["dim"], text_color=self.c["placeholder"],
-            border_width=0, font=("", 13),
+            outer, fg_color="#f8f8f8", text_color=self.c["placeholder"],
+            border_width=1, border_color="#e0e0e0", font=("", 13),
         )
         self.txt.insert("0.0", "вставьте текст сюда...")
         self._placeholder = True
-        self.txt.pack(fill="both", expand=True, pady=(0, 6))
+        self.txt.pack(fill="both", expand=True, pady=(0, 4))
+
+        ctk.CTkFrame(outer, height=1, fg_color=self.c["progress_bg"]).pack(
+            fill="x", pady=(0, 5))
 
         def _focus_in(e):
+            queue.pause_hook()
             if self._placeholder:
                 self.txt.delete("0.0", "end")
                 self.txt.configure(text_color=self.c["text"])
                 self._placeholder = False
 
         def _focus_out(e):
+            queue.resume_hook()
             if not self.txt.get("0.0", "end").strip():
                 self.txt.delete("0.0", "end")
                 self.txt.insert("0.0", "вставьте текст сюда...")
                 self.txt.configure(text_color=self.c["placeholder"])
                 self._placeholder = True
 
-        def _ctrl_a(e):
-            self.txt.tag_add("sel", "0.0", "end")
-            return "break"
-
-        def _ctrl_v(e):
-            if self._placeholder:
-                self.txt.delete("0.0", "end")
-                self.txt.configure(text_color=self.c["text"])
-                self._placeholder = False
-            self.txt.event_generate("<<Paste>>")
-            return "break"
-
         self.txt.bind("<FocusIn>", _focus_in)
         self.txt.bind("<FocusOut>", _focus_out)
-        self.txt.bind("<Control-a>", _ctrl_a)
-        self.txt.bind("<Control-A>", _ctrl_a)
-        self.txt.bind("<Control-v>", _ctrl_v)
-        self.txt.bind("<Control-V>", _ctrl_v)
+        self.bind("<FocusIn>", lambda e: queue.pause_hook())
+        self.bind("<FocusOut>", lambda e: queue.resume_hook())
 
         # AI row
         ai_row = ctk.CTkFrame(outer, fg_color="transparent")
@@ -818,6 +837,7 @@ class App(ctk.CTk):
             self.prog_bar.set(idx / n if n else 0)
         except Exception:
             return
+        self._sync_pill_label()
 
         if n != self._last_queue_len:
             for w in self._list_scroll.winfo_children():
