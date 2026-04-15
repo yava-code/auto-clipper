@@ -9,14 +9,12 @@ use std::sync::{
     atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering::SeqCst},
     Mutex,
 };
-use windows::{
-    core::PCWSTR,
-    Win32::{
-        Foundation::*,
-        Graphics::{Dwm::*, Gdi::*},
-        System::{DataExchange::*, LibraryLoader::GetModuleHandleW, Memory::*},
-        UI::{Input::KeyboardAndMouse::*, WindowsAndMessaging::*},
-    },
+use windows::core::{w, PCWSTR};
+use windows::Win32::{
+    Foundation::*,
+    Graphics::{Dwm::*, Gdi::*},
+    System::{DataExchange::*, LibraryLoader::GetModuleHandleW, Memory::*},
+    UI::{Input::KeyboardAndMouse::*, WindowsAndMessaging::*},
 };
 
 // ─── control ids ─────────────────────────────────────────────────────────────
@@ -46,6 +44,7 @@ const CB_ADDSTRING: u32    = 0x0143;
 const CB_SETCURSEL: u32    = 0x014E;
 const CB_GETCURSEL: u32    = 0x0147;
 const WM_SETFONT: u32      = 0x0030;
+const CF_UNICODETEXT: u32  = 13;
 
 // ─── colors — COLORREF is 0x00BBGGRR ─────────────────────────────────────────
 const C_BG:  COLORREF = COLORREF(0x001a1a1a);
@@ -67,7 +66,7 @@ static DIM_BRUSH:   AtomicIsize = AtomicIsize::new(0);
 // ─── entry ────────────────────────────────────────────────────────────────────
 fn main() {
     unsafe {
-        let hmod = GetModuleHandleW(None).unwrap_or_default();
+        let hmod = GetModuleHandleW(PCWSTR::null()).unwrap_or_default();
         let hi   = HINSTANCE(hmod.0);
 
         BG_BRUSH.store(CreateSolidBrush(C_BG).0, SeqCst);
@@ -80,7 +79,7 @@ fn main() {
             hInstance:     hi,
             lpszClassName: cls,
             hbrBackground: HBRUSH(BG_BRUSH.load(SeqCst)),
-            hCursor:       LoadCursorW(None, IDC_ARROW).unwrap_or_default(),
+            hCursor:       LoadCursorW(HINSTANCE(0), IDC_ARROW).unwrap_or_default(),
             ..Default::default()
         };
         RegisterClassW(&wc);
@@ -95,10 +94,9 @@ fn main() {
             WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
             sw - 295, sh - 370,
             280, 320,
-            None, None,
-            Some(hi),
+            HWND(0), HMENU(0), hi,
             None,
-        ).unwrap_or_default();
+        );
 
         HWND_MAIN.store(hwnd.0, SeqCst);
 
@@ -117,12 +115,12 @@ fn main() {
         let _ = UpdateWindow(hwnd);
 
         // WH_KEYBOARD_LL works without admin — key advantage over Python version
-        let hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(kbhook), None, 0)
+        let hook = SetWindowsHookExW(WH_KEYBOARD_LL, Some(kbhook), HINSTANCE(0), 0)
             .unwrap_or_default();
         HOOK_H.store(hook.0, SeqCst);
 
         let mut msg = MSG::default();
-        while GetMessageW(&mut msg, None, 0, 0).0 > 0 {
+        while GetMessageW(&mut msg, HWND(0), 0, 0).0 > 0 {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
@@ -222,7 +220,7 @@ unsafe extern "system" fn kbhook(
             }
         }
     }
-    CallNextHookEx(None, code, wp, lp)
+    CallNextHookEx(HHOOK(0), code, wp, lp)
 }
 
 // ─── timer: advance queue ─────────────────────────────────────────────────────
@@ -250,7 +248,7 @@ unsafe fn btn_load(hwnd: HWND) {
     if raw.trim().is_empty() { return; }
 
     let strategy = {
-        let combo = GetDlgItem(hwnd, ID_COMBO).unwrap_or_default();
+        let combo = GetDlgItem(hwnd, ID_COMBO);
         SendMessageW(combo, CB_GETCURSEL, WPARAM(0), LPARAM(0)).0 as usize
     };
     let parsed = parse(&raw, strategy);
@@ -303,8 +301,8 @@ unsafe fn create_all_controls(hwnd: HWND) {
                 WINDOW_EX_STYLE::default(),
                 $cls, $text, $style,
                 $x, $y, $w, $h,
-                hwnd, Some(HMENU($id as isize)), Some(hi), None,
-            ).unwrap_or_default();
+                hwnd, HMENU($id as isize), hi, None,
+            );
             SendMessageW(ctrl, WM_SETFONT, WPARAM(font.0 as usize), LPARAM(1));
             ctrl
         }};
@@ -375,7 +373,7 @@ unsafe fn show_input_mode(hwnd: HWND) {
     for id in [ID_PROGRESS, ID_LIST, ID_BTN_PAUSE, ID_BTN_RESET] {
         show_ctrl(hwnd, id, false);
     }
-    let _ = SetWindowPos(hwnd, None, 0, 0, 280, 270,
+    let _ = SetWindowPos(hwnd, HWND(0), 0, 0, 280, 270,
         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     let _ = InvalidateRect(hwnd, None, TRUE);
 }
@@ -390,20 +388,22 @@ unsafe fn show_active_mode(hwnd: HWND) {
     }
     update_list(hwnd);
     update_progress(hwnd);
-    let _ = SetWindowPos(hwnd, None, 0, 0, 280, 165,
+    let _ = SetWindowPos(hwnd, HWND(0), 0, 0, 280, 165,
         SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
     let _ = InvalidateRect(hwnd, None, TRUE);
 }
 
 unsafe fn show_ctrl(hwnd: HWND, id: i32, visible: bool) {
-    if let Ok(h) = GetDlgItem(hwnd, id) {
+    let h = GetDlgItem(hwnd, id);
+    if h.0 != 0 {
         ShowWindow(h, if visible { SW_SHOW } else { SW_HIDE });
     }
 }
 
 // ─── ui helpers ───────────────────────────────────────────────────────────────
 unsafe fn update_list(hwnd: HWND) {
-    let list = match GetDlgItem(hwnd, ID_LIST) { Ok(h) => h, Err(_) => return };
+    let list = GetDlgItem(hwnd, ID_LIST);
+    if list.0 == 0 { return; }
     SendMessageW(list, LB_RESETCONTENT, WPARAM(0), LPARAM(0));
 
     let items = Q_ITEMS.lock().unwrap();
@@ -431,14 +431,16 @@ unsafe fn update_progress(hwnd: HWND) {
 }
 
 unsafe fn set_ctrl_text(hwnd: HWND, id: i32, text: &str) {
-    if let Ok(h) = GetDlgItem(hwnd, id) {
+    let h = GetDlgItem(hwnd, id);
+    if h.0 != 0 {
         let ws: Vec<u16> = text.encode_utf16().chain(once(0)).collect();
         let _ = SetWindowTextW(h, PCWSTR(ws.as_ptr()));
     }
 }
 
 unsafe fn get_ctrl_text(hwnd: HWND, id: i32) -> String {
-    let h = match GetDlgItem(hwnd, id) { Ok(h) => h, Err(_) => return String::new() };
+    let h = GetDlgItem(hwnd, id);
+    if h.0 == 0 { return String::new(); }
     let len = GetWindowTextLengthW(h) as usize;
     if len == 0 { return String::new(); }
     let mut buf = vec![0u16; len + 1];
@@ -448,20 +450,22 @@ unsafe fn get_ctrl_text(hwnd: HWND, id: i32) -> String {
 
 // ─── clipboard (UTF-16 for Cyrillic / any Unicode) ────────────────────────────
 unsafe fn clip_set(text: &str) {
-    if !OpenClipboard(None).is_ok() { return; }
+    if OpenClipboard(HWND(0)).is_err() { return; }
     let _ = EmptyClipboard();
 
     let wide: Vec<u16> = text.encode_utf16().chain(once(0u16)).collect();
     let bytes = wide.len() * 2;
 
-    let hmem = GlobalAlloc(GMEM_MOVEABLE, bytes);
-    if hmem.is_invalid() { let _ = CloseClipboard(); return; }
+    let hmem = match GlobalAlloc(GMEM_MOVEABLE, bytes) {
+        Ok(h) => h,
+        Err(_) => { let _ = CloseClipboard(); return; }
+    };
 
     let ptr = GlobalLock(hmem) as *mut u16;
     std::ptr::copy_nonoverlapping(wide.as_ptr(), ptr, wide.len());
     let _ = GlobalUnlock(hmem);
 
-    let _ = SetClipboardData(CF_UNICODETEXT.0 as u32, HANDLE(hmem.0));
+    let _ = SetClipboardData(CF_UNICODETEXT, HANDLE(hmem.0 as isize));
     let _ = CloseClipboard();
 }
 
@@ -493,7 +497,7 @@ fn parse(text: &str, strategy: usize) -> Vec<String> {
             if !buf.trim().is_empty() { out.push(buf.trim().to_string()); }
             out
         }
-        // Кастомный — по пробельным символам (пользователь может расширить)
+        // Кастомный — по пробельным символам
         _ => text.split_whitespace()
             .map(|s| s.to_string())
             .collect(),

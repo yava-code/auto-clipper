@@ -1,38 +1,80 @@
+import os
 import ctypes
 import time
 import keyboard
 import pyperclip
+
+from core import log
 
 items = []
 idx = 0
 active = False
 on_complete = None
 sleep_ms = 15
-own_hwnd = None   # set by window after creation
-_hotkey = None
+_hotkey = "ctrl+v"
+_hook_registered = False
+
+_our_pid = os.getpid()
+
+
+def _clipqueue_focused():
+    fg = ctypes.windll.user32.GetForegroundWindow()
+    if not fg:
+        return False
+    pid = ctypes.c_ulong(0)
+    ctypes.windll.user32.GetWindowThreadProcessId(fg, ctypes.byref(pid))
+    return pid.value == _our_pid
+
+
+def _register():
+    global _hook_registered
+    if _hook_registered:
+        return
+    keyboard.add_hotkey(_hotkey, _on_ctrl_v, suppress=False)
+    _hook_registered = True
+    log.get().info("hook registered %s", _hotkey)
+
+
+def _unregister():
+    global _hook_registered
+    if not _hook_registered:
+        return
+    try:
+        keyboard.remove_hotkey(_hotkey)
+    except Exception:
+        pass
+    _hook_registered = False
+    log.get().info("hook unregistered")
 
 
 def load(arr):
     global items, idx, active
+    if not arr:
+        return
     items = arr
     idx = 0
     active = True
     pyperclip.copy(items[0])
+    _register()
+    log.get().info("queue loaded items=%d", len(arr))
 
 
-def _clipqueue_focused():
-    if own_hwnd is None:
-        return False
-    return ctypes.windll.user32.GetForegroundWindow() == own_hwnd
+def reset():
+    global active
+    active = False
+    _unregister()
+    log.get().info("queue reset")
 
 
-def on_ctrl_v():
+def _on_ctrl_v():
     global idx, active
-    if _clipqueue_focused() or not active:
-        keyboard.send('ctrl+v')
+    if _clipqueue_focused():
+        # our window is focused — let native paste happen, don't advance
+        return
+    if not active:
         return
 
-    keyboard.send('ctrl+v')
+    log.get().info("ctrl+v advance idx=%d/%d", idx, len(items))
     time.sleep(sleep_ms / 1000)
 
     idx += 1
@@ -40,22 +82,24 @@ def on_ctrl_v():
         pyperclip.copy(items[idx])
     else:
         active = False
+        _unregister()
+        log.get().info("queue complete")
         if on_complete:
             on_complete()
 
 
 def start(hotkey="ctrl+v"):
+    """Store hotkey — does NOT register hook. Hook is registered only when queue loads."""
     global _hotkey
     _hotkey = hotkey
-    keyboard.add_hotkey(hotkey, on_ctrl_v, suppress=True)
+    log.get().info("queue init hotkey=%s", hotkey)
 
 
 def change_hotkey(new_hotkey):
     global _hotkey
-    if _hotkey:
-        try:
-            keyboard.remove_hotkey(_hotkey)
-        except Exception:
-            pass
+    was_registered = _hook_registered
+    _unregister()
     _hotkey = new_hotkey
-    keyboard.add_hotkey(new_hotkey, on_ctrl_v, suppress=True)
+    log.get().info("hotkey changed to %s", new_hotkey)
+    if was_registered:
+        _register()

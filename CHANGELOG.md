@@ -7,6 +7,37 @@
 - `main.py` — точка входа с хардкодед массивом
 - `requirements.txt` — keyboard, pyperclip
 
+## 2026-04-15 — Bugfixes Round 4: paste button + key bindings
+
+- `ui/window.py` — кнопка 📋 (paste из clipboard) и ✕ (очистить) рядом с textbox — обходит любые проблемы с keyboard hook
+- `ui/window.py` — явные tkinter bindings для Ctrl+A (select all) и Ctrl+V (paste + clear placeholder)
+
+## 2026-04-15 — Bugfixes Round 3: textbox fix
+
+- `core/queue.py` — полная переработка архитектуры hook: `start()` теперь только сохраняет hotkey; hook регистрируется ТОЛЬКО при `load()` и снимается при завершении/reset; во время input mode никакого перехвата клавиш нет совсем → Ctrl+V/A/C/X в textbox работают нативно
+- `core/queue.py` — добавлен `reset()` для явного снятия hook + сброса состояния
+- `ui/window.py` — placeholder в textbox: click-to-clear (серый текст исчезает при фокусе, возвращается когда пусто); больше не надо вручную выделять и удалять
+- `ui/window.py` — `_reset()` вызывает `queue.reset()` вместо прямого `queue.active = False`
+
+## 2026-04-15 — Bugfixes Round 2
+
+- `core/queue.py` — критический фикс: `suppress=False` вместо `suppress=True` — нативный Ctrl+V больше не перехватывается (clipboard pre-load работает без suppress); убран `keyboard.send()` из hook (бесконечный цикл)
+- `core/config.py` — авто-загрузка API ключа из `.env` (форматы `GROQ_API_KEY=...` и raw `gsk_...`); добавлено логирование
+- `core/groq_client.py` — добавлено логирование запросов/ответов; улучшена обработка ошибок парсинга JSON
+- `ui/window.py` — ошибки AI и отсутствие ключа подсвечиваются красным; обновлён список моделей Groq (убраны deprecated)
+
+## 2026-04-15 — Bugfixes + Tests
+
+- `core/queue.py` — исправлен баг: `_clipqueue_focused()` теперь сравнивает по PID (GetWindowThreadProcessId), а не по HWND — работает когда фокус у дочернего виджета (textbox)
+- `core/queue.py` — исправлен баг: `load([])` теперь возвращает early (не краш IndexError)
+- `ui/window.py` — settings panel заменена на CTkScrollableFrame (height=220) — фикс скролла
+- `ui/window.py` — добавлен выбор модели Groq (OptionMenu: 5 моделей) в настройках и конфиге
+- `core/config.py` — новое поле `groq_model` (default: llama-3.3-70b-versatile)
+- `.gitignore` — переписан с glob паттернами (убраны хардкодед имена файлов)
+- `native/src/main.rs` — исправлен под windows crate 0.52: `use windows::core::w`, убраны Option<> обёртки для HWND/HMENU, CreateWindowExW возвращает HWND напрямую, GlobalAlloc возвращает Result<HGLOBAL>, OpenClipboard возвращает Result, добавлена константа CF_UNICODETEXT=13
+- `tests/test_parser.py` — новый: 17 тестов (Lines, Comma, Sentences, Custom, Transform)
+- `tests/test_queue.py` — новый: 6 тестов (load поведение, state, defaults)
+
 ## 2026-04-15 — Phase 4: Native Rust
 
 - `native/Cargo.toml` — workspace: windows 0.58, embed-resource, release profile (opt-z, lto, strip)
